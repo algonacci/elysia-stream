@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streaming OpenAI Response</title>
+</head>
+
+<body>
+    <h1>Streaming OpenAI Response</h1>
+    <form id="promptForm">
+        <label for="prompt">Prompt:</label>
+        <input type="text" id="prompt" name="prompt">
+        <button type="submit">Submit</button>
+    </form>
+    <div id="response"></div>
+
+    <script>
+        document.getElementById('promptForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const prompt = document.getElementById('prompt').value;
+            const responseDiv = document.getElementById('response');
+            responseDiv.innerHTML = '';
+
+            const response = await fetch(`http://127.0.0.1:3000/ai`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ prompt })
+            });
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let done = false;
+
+            while (!done) {
+                const { value, done: readerDone } = await reader.read();
+                done = readerDone;
+                const chunk = decoder.decode(value, { stream: true });
+
+                // Split the chunk by new lines and process each line
+                const lines = chunk.split('\n').filter(line => line.trim() !== '');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const message = JSON.parse(line.substring(6));
+                            if (message.choices && message.choices[0].delta && message.choices[0].delta.content) {
+                                responseDiv.innerHTML += message.choices[0].delta.content;
+                            }
+                        } catch (e) {
+                            console.error('Error parsing JSON:', e);
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>
